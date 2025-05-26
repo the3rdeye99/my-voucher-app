@@ -21,7 +21,9 @@ export default function MyVouchers() {
     try {
       setLoading(true)
       const data = await getVouchers(user._id)
-      setVouchers(data)
+      // Sort vouchers by date in descending order (newest first)
+      const sortedVouchers = [...data].sort((a, b) => new Date(b.date) - new Date(a.date))
+      setVouchers(sortedVouchers)
     } catch (error) {
       setError('Failed to fetch vouchers. Please try again later.')
       console.error('Error fetching vouchers:', error)

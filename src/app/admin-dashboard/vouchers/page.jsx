@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import AdminSidebar from '../../../components/AdminSidebar'
 import VouchersList from '../../../components/admin/VouchersList'
-import { getVouchers, approveVoucher, exportVouchers } from '../../../services/api'
+import { getVouchers, approveVoucher, exportVouchers, rejectVoucher } from '../../../services/api'
 
 export default function AdminVouchers() {
   const [activeSection, setActiveSection] = useState('vouchers')
@@ -14,6 +14,7 @@ export default function AdminVouchers() {
   const [error, setError] = useState(null)
   const [isExporting, setIsExporting] = useState(false)
   const [user, setUser] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(null)
 
   useEffect(() => {
     // Get user from localStorage
@@ -21,29 +22,51 @@ export default function AdminVouchers() {
     if (userStr) {
       setUser(JSON.parse(userStr))
     }
-    fetchVouchers()
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchVouchers()
+      // Set up polling every 5 seconds for real-time updates
+      const interval = setInterval(fetchVouchers, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [user, statusFilter, searchQuery])
 
   const fetchVouchers = async () => {
     try {
       setLoading(true)
       const data = await getVouchers()
       setVouchers(data)
+      setLastUpdate(new Date())
+      setError(null)
     } catch (error) {
-      setError('Failed to fetch vouchers. Please try again later.')
       console.error('Error fetching vouchers:', error)
+      setError('Failed to fetch vouchers')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleApproveVoucher = async (voucherId) => {
+  const handleApprove = async (voucherId) => {
     try {
       await approveVoucher(voucherId)
-      // Refresh the vouchers list
+      // Fetch vouchers immediately after approval
       await fetchVouchers()
     } catch (error) {
       console.error('Error approving voucher:', error)
+      setError('Failed to approve voucher')
+    }
+  }
+
+  const handleReject = async (voucherId) => {
+    try {
+      await rejectVoucher(voucherId)
+      // Fetch vouchers immediately after rejection
+      await fetchVouchers()
+    } catch (error) {
+      console.error('Error rejecting voucher:', error)
+      setError('Failed to reject voucher')
     }
   }
 
@@ -122,7 +145,8 @@ export default function AdminVouchers() {
 
             <VouchersList
               vouchers={filteredVouchers}
-              onApprove={handleApproveVoucher}
+              onApprove={handleApprove}
+              onReject={handleReject}
               user={user}
             />
           </div>

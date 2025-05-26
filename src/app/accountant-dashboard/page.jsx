@@ -136,7 +136,7 @@ export default function AccountantDashboard() {
               <h2 className="text-lg font-semibold text-gray-900">Recent Vouchers</h2>
             </div>
             <VouchersList
-              vouchers={vouchers.slice(0, 5)}
+              vouchers={[...vouchers].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)}
               onApproveVoucher={handleApproveVoucher}
               showActions={true}
             />

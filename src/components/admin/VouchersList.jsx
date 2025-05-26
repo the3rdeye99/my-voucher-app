@@ -3,21 +3,25 @@
 import { useState, useMemo } from 'react'
 import { rejectVoucher, markVoucherAsPaid } from '../../services/api'
 
-export default function VouchersList({ vouchers, onApprove, user }) {
+export default function VouchersList({ vouchers, onApprove, onReject, user, onMarkAsPaid, showActions = true }) {
   const [selectedVoucher, setSelectedVoucher] = useState(null)
   const [isRejecting, setIsRejecting] = useState(false)
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
-  // Filter vouchers based on user role
+  // Filter vouchers based on user role and sort by date
   const filteredVouchers = useMemo(() => {
-    if (!user) return vouchers; // If no user, show all vouchers
+    let filtered = vouchers;
     
-    if (user.role === 'admin' || user.role === 'accountant') {
-      return vouchers; // Admin and accountants can see all vouchers
+    if (user) {
+      if (user.role === 'admin' || user.role === 'accountant') {
+        filtered = vouchers; // Admin and accountants can see all vouchers
+      } else {
+        filtered = vouchers.filter(voucher => voucher.staffId === user.id);
+      }
     }
     
-    // Staff can only see their own vouchers
-    return vouchers.filter(voucher => voucher.staffId === user.id);
+    // Sort by date in descending order (newest first)
+    return [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [vouchers, user]);
 
   const handleReject = async (voucherId) => {

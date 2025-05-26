@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import AdminSidebar from '../../../components/AdminSidebar'
 import VouchersList from '../../../components/admin/VouchersList'
-import { getVouchers, approveVoucher, exportVouchers } from '../../../services/api'
+import { getVouchers, approveVoucher, exportVouchers, markVoucherAsPaid } from '../../../services/api'
 
 export default function AccountantVouchers() {
   const { user } = useAuth()
@@ -14,19 +14,27 @@ export default function AccountantVouchers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState(null)
 
   useEffect(() => {
-    fetchVouchers()
-  }, [])
+    if (user) {
+      fetchVouchers()
+      // Set up polling every 5 seconds for real-time updates
+      const interval = setInterval(fetchVouchers, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [user, statusFilter, searchQuery])
 
   const fetchVouchers = async () => {
     try {
       setLoading(true)
       const data = await getVouchers()
       setVouchers(data)
+      setLastUpdate(new Date())
+      setError(null)
     } catch (error) {
-      setError('Failed to fetch vouchers. Please try again later.')
       console.error('Error fetching vouchers:', error)
+      setError('Failed to fetch vouchers')
     } finally {
       setLoading(false)
     }
@@ -39,6 +47,17 @@ export default function AccountantVouchers() {
       await fetchVouchers()
     } catch (error) {
       console.error('Error approving voucher:', error)
+    }
+  }
+
+  const handleMarkAsPaid = async (voucherId) => {
+    try {
+      await markVoucherAsPaid(voucherId)
+      // Fetch vouchers immediately after marking as paid
+      await fetchVouchers()
+    } catch (error) {
+      console.error('Error marking voucher as paid:', error)
+      setError('Failed to mark voucher as paid')
     }
   }
 
@@ -119,6 +138,7 @@ export default function AccountantVouchers() {
               vouchers={filteredVouchers}
               user={user}
               onApproveVoucher={handleApproveVoucher}
+              onMarkAsPaid={handleMarkAsPaid}
               showActions={true}
             />
           </div>

@@ -1,10 +1,23 @@
 import { useState } from 'react';
-import { BellIcon } from '@heroicons/react/24/outline';
+import { BellIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { clearAllNotifications } from '../services/api';
 
 const Notification = ({ notifications, onMarkAsRead }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleClearAll = async () => {
+    try {
+      await clearAllNotifications();
+      // Clear notifications locally instead of reloading
+      notifications.length = 0;
+      // Close the notification panel
+      setIsOpen(false);
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+    }
+  };
 
   return (
     <div className="relative">
@@ -22,7 +35,19 @@ const Notification = ({ notifications, onMarkAsRead }) => {
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-md shadow-lg overflow-hidden z-50 border border-gray-700">
-          <div className="py-1">
+          <div className="p-2 border-b border-gray-700 flex justify-between items-center">
+            <h3 className="text-sm font-medium text-white">Notifications</h3>
+            {notifications.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="p-1 text-gray-400 hover:text-white focus:outline-none"
+                title="Clear all notifications"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="px-4 py-2 text-sm text-gray-400">No notifications</div>
             ) : (

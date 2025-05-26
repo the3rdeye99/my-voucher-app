@@ -284,6 +284,19 @@ export const markNotificationAsRead = async (notificationId) => {
   return response.json();
 };
 
+export const clearAllNotifications = async () => {
+  const response = await fetch(`${API_URL}/notifications/clear-all`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${localStorage.getItem('token')}`
+    }
+  });
+  if (!response.ok) {
+    throw new Error('Failed to clear notifications');
+  }
+  return response.json();
+};
+
 export const createNotification = async (notification) => {
   const response = await fetch(`${API_URL}/notifications`, {
     method: 'POST',

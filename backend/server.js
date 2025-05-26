@@ -259,6 +259,21 @@ app.get('/api/vouchers', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper function to create notifications
+const createNotification = async (message, type, recipients, organization) => {
+  try {
+    const notifications = recipients.map(recipientId => ({
+      message,
+      type,
+      recipient: recipientId,
+      organization
+    }));
+    await Notification.insertMany(notifications);
+  } catch (error) {
+    console.error('Error creating notifications:', error);
+  }
+};
+
 // Create voucher
 app.post('/api/vouchers', async (req, res) => {
   try {
@@ -328,6 +343,19 @@ app.post('/api/vouchers', async (req, res) => {
     const savedVoucher = await voucher.save();
     console.log('Voucher saved successfully:', savedVoucher);
 
+    // Create notifications for admin and accountant
+    const adminAndAccountant = await User.find({
+      organization,
+      role: { $in: ['admin', 'accountant'] }
+    }).select('_id');
+
+    await createNotification(
+      `New voucher ${voucherId} created by ${staffName}`,
+      'voucher',
+      adminAndAccountant.map(user => user._id),
+      organization
+    );
+
     res.status(201).json(savedVoucher);
   } catch (error) {
     console.error('Error creating voucher:', error);
@@ -348,12 +376,32 @@ app.put('/api/vouchers/:id/approve', async (req, res) => {
   try {
     const voucher = await Voucher.findOneAndUpdate(
       { id: req.params.id },
-      { status: 'approved' },
+      { 
+        status: 'approved',
+        updatedAt: new Date()
+      },
       { new: true }
     );
     if (!voucher) {
       return res.status(404).json({ message: 'Voucher not found' });
     }
+
+    // Create notifications for accountant and staff
+    const accountantAndStaff = await User.find({
+      organization: voucher.organization,
+      $or: [
+        { role: 'accountant' },
+        { _id: voucher.staffId }
+      ]
+    }).select('_id');
+
+    await createNotification(
+      `Voucher ${voucher.id} has been approved`,
+      'voucher',
+      accountantAndStaff.map(user => user._id),
+      voucher.organization
+    );
+
     res.json(voucher);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -392,6 +440,23 @@ app.put('/api/vouchers/:id/pay', async (req, res) => {
     if (!voucher) {
       return res.status(404).json({ message: 'Voucher not found' });
     }
+
+    // Create notifications for admin and staff
+    const adminAndStaff = await User.find({
+      organization: voucher.organization,
+      $or: [
+        { role: 'admin' },
+        { _id: voucher.staffId }
+      ]
+    }).select('_id');
+
+    await createNotification(
+      `Voucher ${voucher.id} has been marked as paid`,
+      'voucher',
+      adminAndStaff.map(user => user._id),
+      voucher.organization
+    );
+
     res.json(voucher);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -525,6 +590,22 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error marking notification as read:', error);
     res.status(500).json({ message: 'Failed to mark notification as read' });
+  }
+});
+
+app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) => {
+  try {
+    await Notification.deleteMany({
+      $or: [
+        { recipient: req.user.id },
+        { organization: req.user.organization }
+      ]
+    });
+    
+    res.json({ message: 'All notifications cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    res.status(500).json({ message: 'Failed to clear notifications' });
   }
 });
 

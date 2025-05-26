@@ -1,7 +1,10 @@
 import React from 'react'
 
 export default function ApprovalHistory({ vouchers }) {
-  const approvedVouchers = vouchers.filter(voucher => voucher.status === 'approved')
+  // Filter approved vouchers and sort by date in descending order (newest first)
+  const approvedVouchers = vouchers
+    .filter(voucher => voucher.status === 'approved')
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -25,7 +28,7 @@ export default function ApprovalHistory({ vouchers }) {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{voucher.amount.toLocaleString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher.approvedBy || 'Admin'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {new Date(voucher.updatedAt).toLocaleDateString()}
+                  {new Date(voucher.date).toLocaleDateString()}
                 </td>
               </tr>
             ))}

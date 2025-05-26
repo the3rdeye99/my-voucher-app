@@ -6,28 +6,41 @@ import AdminSidebar from '../../../components/AdminSidebar'
 import VouchersList from '../../../components/admin/VouchersList'
 import { getVouchers } from '../../../services/api'
 
-function StaffVouchers() {
-  const { user } = useAuth()
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [searchQuery, setSearchQuery] = useState('')
+export default function StaffVouchers() {
   const [vouchers, setVouchers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [user, setUser] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(null)
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
+    }
+  }, [])
 
   useEffect(() => {
     if (user) {
       fetchVouchers()
+      // Set up polling every 5 seconds for real-time updates
+      const interval = setInterval(fetchVouchers, 5000)
+      return () => clearInterval(interval)
     }
-  }, [user])
+  }, [user, statusFilter, searchQuery])
 
   const fetchVouchers = async () => {
     try {
       setLoading(true)
       const data = await getVouchers(user.id)
       setVouchers(data)
+      setLastUpdate(new Date())
+      setError(null)
     } catch (error) {
-      setError('Failed to fetch vouchers. Please try again later.')
       console.error('Error fetching vouchers:', error)
+      setError('Failed to fetch vouchers')
     } finally {
       setLoading(false)
     }
@@ -93,6 +106,4 @@ function StaffVouchers() {
       </main>
     </div>
   )
-}
-
-export default StaffVouchers 
+} 
