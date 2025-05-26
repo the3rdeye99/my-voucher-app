@@ -75,6 +75,18 @@ const voucherSchema = new mongoose.Schema({
 
 const Voucher = mongoose.model('Voucher', voucherSchema);
 
+// Notification Schema
+const notificationSchema = new mongoose.Schema({
+  message: { type: String, required: true },
+  type: { type: String, enum: ['voucher', 'system', 'user'], required: true },
+  read: { type: Boolean, default: false },
+  recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Notification = mongoose.model('Notification', notificationSchema);
+
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -222,13 +234,17 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Get all vouchers
-app.get('/api/vouchers', async (req, res) => {
+app.get('/api/vouchers', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.query;
     let query = {};
     
-    // If userId is provided, filter vouchers for that user
-    if (userId) {
+    // If user is staff, they can only see their own vouchers
+    if (req.user.role === 'staff') {
+      query.staffId = req.user.id;
+    }
+    // If userId is provided and user is admin/accountant, filter vouchers for that user
+    else if (userId && (req.user.role === 'admin' || req.user.role === 'accountant')) {
       query.staffId = userId;
     }
     
@@ -471,6 +487,63 @@ app.delete('/api/users', async (req, res) => {
   } catch (error) {
     console.error('Error deleting users:', error);
     res.status(500).json({ message: 'Error deleting users', error: error.message });
+  }
+});
+
+// Notification endpoints
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const notifications = await Notification.find({
+      $or: [
+        { recipient: req.user.id },
+        { organization: req.user.organization }
+      ]
+    })
+    .sort({ createdAt: -1 })
+    .limit(50);
+    
+    res.json(notifications);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ message: 'Failed to fetch notifications' });
+  }
+});
+
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id },
+      { read: true },
+      { new: true }
+    );
+    
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    
+    res.json(notification);
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ message: 'Failed to mark notification as read' });
+  }
+});
+
+app.post('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const { message, type, recipient } = req.body;
+    
+    const notification = new Notification({
+      message,
+      type,
+      recipient,
+      organization: req.user.organization
+    });
+    
+    await notification.save();
+    res.status(201).json(notification);
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    res.status(500).json({ message: 'Failed to create notification' });
   }
 });
 

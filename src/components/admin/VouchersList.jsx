@@ -10,7 +10,7 @@ export default function VouchersList({ vouchers, onApprove, user }) {
 
   // Filter vouchers based on user role
   const filteredVouchers = useMemo(() => {
-    if (!user) return [];
+    if (!user) return vouchers; // If no user, show all vouchers
     
     if (user.role === 'admin' || user.role === 'accountant') {
       return vouchers; // Admin and accountants can see all vouchers

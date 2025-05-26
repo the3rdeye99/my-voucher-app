@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import AdminSidebar from '../../../components/AdminSidebar'
 import VouchersList from '../../../components/admin/VouchersList'
-import { getVouchers, approveVoucher } from '../../../services/api'
+import { getVouchers, approveVoucher, exportVouchers } from '../../../services/api'
 
 export default function AccountantVouchers() {
   const { user } = useAuth()
@@ -13,6 +13,7 @@ export default function AccountantVouchers() {
   const [vouchers, setVouchers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     fetchVouchers()
@@ -49,9 +50,19 @@ export default function AccountantVouchers() {
     return matchesStatus && matchesSearch
   })
 
-  const handleExport = () => {
-    // Implement export functionality
-    console.log('Exporting vouchers...')
+  const handleExport = async () => {
+    try {
+      setIsExporting(true)
+      await exportVouchers({
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        search: searchQuery || undefined
+      })
+    } catch (error) {
+      console.error('Error exporting vouchers:', error)
+      alert('Failed to export vouchers. Please try again.')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   if (error) {
@@ -96,9 +107,10 @@ export default function AccountantVouchers() {
                 />
                 <button
                   onClick={handleExport}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  disabled={isExporting}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Export
+                  {isExporting ? 'Exporting...' : 'Export'}
                 </button>
               </div>
             </div>

@@ -23,7 +23,7 @@ function StaffVouchers() {
   const fetchVouchers = async () => {
     try {
       setLoading(true)
-      const data = await getVouchers(user._id)
+      const data = await getVouchers(user.id)
       setVouchers(data)
     } catch (error) {
       setError('Failed to fetch vouchers. Please try again later.')

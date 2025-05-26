@@ -13,8 +13,14 @@ export default function AdminVouchers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
+    // Get user from localStorage
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      setUser(JSON.parse(userStr))
+    }
     fetchVouchers()
   }, [])
 
@@ -117,6 +123,7 @@ export default function AdminVouchers() {
             <VouchersList
               vouchers={filteredVouchers}
               onApprove={handleApproveVoucher}
+              user={user}
             />
           </div>
         </div>
