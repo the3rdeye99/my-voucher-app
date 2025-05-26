@@ -312,36 +312,34 @@ export const createNotification = async (notification) => {
   return response.json();
 };
 
-export const exportVouchers = async (filters = {}) => {
+export const exportVouchers = async (data) => {
   try {
-    const response = await api.get('/vouchers/export', {
-      params: filters,
-      responseType: 'blob' // Important for file downloads
+    const response = await fetch(`${API_URL}/vouchers/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(data)
     });
-    
-    // Create a blob from the response data
-    const blob = new Blob([response.data], { type: 'application/vnd.ms-excel' });
-    
-    // Create a URL for the blob
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to export vouchers');
+    }
+
+    const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
-    
-    // Create a temporary link element
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `vouchers-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-    
-    // Append link to body, click it, and remove it
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Clean up the URL
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vouchers-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
     window.URL.revokeObjectURL(url);
-    
-    return true;
+    document.body.removeChild(a);
   } catch (error) {
-    logError(error, 'Error exporting vouchers');
-    throw error;
+    console.error('Error exporting vouchers:', error);
+    throw new Error(error.message || 'Failed to export vouchers');
   }
 };
 

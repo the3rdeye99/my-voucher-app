@@ -9,6 +9,8 @@ export default function AdminVouchers() {
   const [activeSection, setActiveSection] = useState('vouchers')
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [vouchers, setVouchers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,7 +33,7 @@ export default function AdminVouchers() {
       const interval = setInterval(fetchVouchers, 5000)
       return () => clearInterval(interval)
     }
-  }, [user, statusFilter, searchQuery])
+  }, [user, statusFilter, searchQuery, startDate, endDate])
 
   const fetchVouchers = async () => {
     try {
@@ -70,24 +72,41 @@ export default function AdminVouchers() {
     }
   }
 
+  const formatAmount = (amount) => {
+    return `₦${amount.toLocaleString()}`
+  }
+
   const filteredVouchers = vouchers.filter(voucher => {
-    const matchesStatus = statusFilter === 'all' ? true : voucher.status === statusFilter
-    const matchesSearch = searchQuery === '' ? true : 
-      voucher.staffName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      voucher.id.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesStatus && matchesSearch
+    const matchesStatus = statusFilter === 'all' || voucher.status === statusFilter
+    const matchesSearch = !searchQuery || 
+      voucher.purpose.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      voucher.staffName.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesDate = (!startDate || new Date(voucher.date) >= new Date(startDate)) && 
+                       (!endDate || new Date(voucher.date) <= new Date(endDate))
+    return matchesStatus && matchesSearch && matchesDate
   })
+
+  const totalAmountPaid = filteredVouchers
+    .filter(voucher => voucher.status === 'paid')
+    .reduce((sum, voucher) => sum + voucher.amount, 0)
 
   const handleExport = async () => {
     try {
       setIsExporting(true)
-      await exportVouchers({
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        search: searchQuery || undefined
-      })
+      const exportData = {
+        vouchers: filteredVouchers,
+        summary: {
+          totalAmountPaid,
+          totalVouchers: filteredVouchers.length,
+          paidVouchers: filteredVouchers.filter(v => v.status === 'paid').length,
+          dateRange: startDate && endDate ? `${startDate} to ${endDate}` : 'All time',
+          exportDate: new Date().toLocaleString()
+        }
+      }
+      await exportVouchers(exportData)
     } catch (error) {
       console.error('Error exporting vouchers:', error)
-      alert('Failed to export vouchers. Please try again.')
+      setError('Failed to export vouchers')
     } finally {
       setIsExporting(false)
     }
@@ -143,11 +162,51 @@ export default function AdminVouchers() {
               </div>
             </div>
 
+            {/* Total Amount Summary */}
+            <div className="mb-6 bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">Total Amount Paid</h3>
+                  <p className="text-sm text-gray-500">
+                    {startDate && endDate 
+                      ? `From ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`
+                      : 'All time'}
+                  </p>
+                </div>
+                <p className="text-2xl font-bold text-red-600">
+                  {formatAmount(totalAmountPaid)}
+                </p>
+              </div>
+            </div>
+
+            {/* Date Filters */}
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                />
+              </div>
+            </div>
+
             <VouchersList
               vouchers={filteredVouchers}
+              user={user}
               onApprove={handleApprove}
               onReject={handleReject}
-              user={user}
+              showActions={true}
             />
           </div>
         </div>

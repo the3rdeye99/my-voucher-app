@@ -5,12 +5,14 @@ import { useAuth } from '../../context/AuthContext'
 import AdminSidebar from '../../components/AdminSidebar'
 import VouchersList from '../../components/admin/VouchersList'
 import { getVouchers, approveVoucher } from '../../services/api'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 
 export default function AccountantDashboard() {
   const { user } = useAuth()
   const [vouchers, setVouchers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showMonthlyTotalModal, setShowMonthlyTotalModal] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -48,6 +50,20 @@ export default function AccountantDashboard() {
   }
 
   const totalAmountPending = approvedVouchers.reduce((sum, voucher) => sum + voucher.amount, 0)
+
+  // Calculate monthly total
+  const getMonthlyTotal = () => {
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth()
+    const currentYear = currentDate.getFullYear()
+
+    return paidVouchers
+      .filter(voucher => {
+        const voucherDate = new Date(voucher.date)
+        return voucherDate.getMonth() === currentMonth && voucherDate.getFullYear() === currentYear
+      })
+      .reduce((sum, voucher) => sum + voucher.amount, 0)
+  }
 
   if (error) {
     return (
@@ -130,6 +146,16 @@ export default function AccountantDashboard() {
             </div>
           </div>
 
+          {/* Monthly Total Button */}
+          <div className="mb-6">
+            <button
+              onClick={() => setShowMonthlyTotalModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              View Monthly Total
+            </button>
+          </div>
+
           {/* Vouchers List */}
           <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b border-gray-200">
@@ -143,6 +169,56 @@ export default function AccountantDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Monthly Total Modal */}
+      {showMonthlyTotalModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Monthly Payment Summary</h3>
+              <button
+                onClick={() => setShowMonthlyTotalModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-sm text-gray-500">Current Month</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+              <div className="mb-4">
+                <p className="text-sm text-gray-500">Total Amount Paid</p>
+                <p className="text-3xl font-bold text-red-600">
+                  {formatAmount(getMonthlyTotal())}
+                </p>
+              </div>
+              <div className="mb-4">
+                <p className="text-sm text-gray-500">Number of Paid Vouchers</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {paidVouchers.filter(voucher => {
+                    const voucherDate = new Date(voucher.date)
+                    const currentDate = new Date()
+                    return voucherDate.getMonth() === currentDate.getMonth() && 
+                           voucherDate.getFullYear() === currentDate.getFullYear()
+                  }).length}
+                </p>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 rounded-b-lg">
+              <button
+                onClick={() => setShowMonthlyTotalModal(false)}
+                className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

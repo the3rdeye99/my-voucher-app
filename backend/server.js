@@ -629,34 +629,40 @@ app.post('/api/notifications', authenticateToken, async (req, res) => {
 });
 
 // Export vouchers endpoint
-app.get('/api/vouchers/export', authenticateToken, async (req, res) => {
+app.post('/api/vouchers/export', authenticateToken, async (req, res) => {
   try {
-    const { status, search } = req.query;
-    let query = {};
+    const { vouchers, summary } = req.body;
     
-    // Apply filters if provided
-    if (status && status !== 'all') {
-      query.status = status;
-    }
-    
-    if (search) {
-      query.$or = [
-        { staffName: { $regex: search, $options: 'i' } },
-        { id: { $regex: search, $options: 'i' } }
-      ];
-    }
-    
-    const vouchers = await Voucher.find(query)
-      .populate('staffId', 'name email')
-      .populate('organization', 'name')
-      .sort({ createdAt: -1 });
-
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Vouchers');
+    
+    // Add summary worksheet
+    const summarySheet = workbook.addWorksheet('Summary');
+    summarySheet.columns = [
+      { header: 'Metric', key: 'metric', width: 20 },
+      { header: 'Value', key: 'value', width: 30 }
+    ];
+    
+    // Add summary data
+    summarySheet.addRows([
+      { metric: 'Total Amount Paid', value: `₦${summary.totalAmountPaid.toLocaleString()}` },
+      { metric: 'Total Vouchers', value: summary.totalVouchers },
+      { metric: 'Paid Vouchers', value: summary.paidVouchers },
+      { metric: 'Date Range', value: summary.dateRange },
+      { metric: 'Export Date', value: summary.exportDate }
+    ]);
 
-    // Add headers
-    worksheet.columns = [
+    // Style summary sheet
+    summarySheet.getRow(1).font = { bold: true };
+    summarySheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    // Add vouchers worksheet
+    const vouchersSheet = workbook.addWorksheet('Vouchers');
+    vouchersSheet.columns = [
       { header: 'Voucher ID', key: 'id', width: 15 },
       { header: 'Staff Name', key: 'staffName', width: 20 },
       { header: 'Purpose', key: 'purpose', width: 30 },
@@ -667,13 +673,13 @@ app.get('/api/vouchers/export', authenticateToken, async (req, res) => {
       { header: 'Description', key: 'description', width: 40 }
     ];
 
-    // Add data rows
+    // Add voucher data
     vouchers.forEach(voucher => {
-      worksheet.addRow({
+      vouchersSheet.addRow({
         id: voucher.id,
         staffName: voucher.staffName,
         purpose: voucher.purpose,
-        amount: voucher.amount,
+        amount: `₦${voucher.amount.toLocaleString()}`,
         status: voucher.status,
         date: new Date(voucher.date).toLocaleDateString(),
         neededBy: new Date(voucher.neededBy).toLocaleDateString(),
@@ -681,9 +687,9 @@ app.get('/api/vouchers/export', authenticateToken, async (req, res) => {
       });
     });
 
-    // Style the header row
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
+    // Style vouchers sheet
+    vouchersSheet.getRow(1).font = { bold: true };
+    vouchersSheet.getRow(1).fill = {
       type: 'pattern',
       pattern: 'solid',
       fgColor: { argb: 'FFE0E0E0' }
