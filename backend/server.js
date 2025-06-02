@@ -70,7 +70,8 @@ const voucherSchema = new mongoose.Schema({
   neededBy: { type: Date, required: true },
   staffName: { type: String, required: true },
   staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization' }
+  organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization' },
+  approvedBy: { type: String }
 });
 
 const Voucher = mongoose.model('Voucher', voucherSchema);
@@ -88,7 +89,7 @@ const notificationSchema = new mongoose.Schema({
 const Notification = mongoose.model('Notification', notificationSchema);
 
 // Authentication middleware
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -96,13 +97,22 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'Authentication token required' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid or expired token' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(403).json({ message: 'User not found' });
     }
-    req.user = user;
+    req.user = {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      name: user.name
+    };
     next();
-  });
+  } catch (err) {
+    return res.status(403).json({ message: 'Invalid or expired token' });
+  }
 };
 
 // Admin middleware
@@ -206,7 +216,8 @@ app.post('/api/login', async (req, res) => {
       { 
         id: user._id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        name: user.name
       },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
@@ -372,19 +383,31 @@ app.post('/api/vouchers', async (req, res) => {
   }
 });
 
-app.put('/api/vouchers/:id/approve', async (req, res) => {
+app.put('/api/vouchers/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    console.log('Approving voucher:', {
+      voucherId: req.params.id,
+      user: req.user
+    });
+
     const voucher = await Voucher.findOneAndUpdate(
       { id: req.params.id },
       { 
         status: 'approved',
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        approvedBy: req.user.name
       },
       { new: true }
     );
     if (!voucher) {
       return res.status(404).json({ message: 'Voucher not found' });
     }
+
+    console.log('Voucher approved:', {
+      voucherId: voucher.id,
+      approvedBy: voucher.approvedBy,
+      status: voucher.status
+    });
 
     // Create notifications for accountant and staff
     const accountantAndStaff = await User.find({
@@ -396,7 +419,7 @@ app.put('/api/vouchers/:id/approve', async (req, res) => {
     }).select('_id');
 
     await createNotification(
-      `Voucher ${voucher.id} has been approved`,
+      `Voucher ${voucher.id} has been approved by ${req.user.name}`,
       'voucher',
       accountantAndStaff.map(user => user._id),
       voucher.organization
@@ -404,6 +427,7 @@ app.put('/api/vouchers/:id/approve', async (req, res) => {
 
     res.json(voucher);
   } catch (error) {
+    console.error('Error approving voucher:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -490,6 +514,20 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Invalid organization' });
     }
 
+    // Find the organization's first admin (main admin)
+    const mainAdmin = await User.findOne({
+      organization: organization,
+      role: 'admin'
+    }).sort({ createdAt: 1 });
+
+    // Check if the current user is the main admin
+    const isMainAdmin = mainAdmin && mainAdmin._id.toString() === req.user.id;
+
+    // Only allow main admin to create users
+    if (!isMainAdmin) {
+      return res.status(403).json({ message: 'Only the main admin can create new users' });
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -516,18 +554,42 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
+    // Find the user being updated
+    const userToUpdate = await User.findById(req.params.id);
+    if (!userToUpdate) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Find the organization's first admin (main admin)
+    const mainAdmin = await User.findOne({
+      organization: userToUpdate.organization,
+      role: 'admin'
+    }).sort({ createdAt: 1 });
+
+    // Check if the current user is the main admin
+    const isMainAdmin = mainAdmin && mainAdmin._id.toString() === req.user.id;
+
+    // If trying to update name and not the main admin, remove name from update
+    if (req.body.name && !isMainAdmin) {
+      delete req.body.name;
+    }
+
+    // Update the user
+    const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true }
     );
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.json(user);
+
+    // Remove password from response
+    const userResponse = updatedUser.toObject();
+    delete userResponse.password;
+
+    res.json(userResponse);
   } catch (error) {
+    console.error('Error updating user:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -590,7 +652,7 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error marking notification as read:', error);
     res.status(500).json({ message: 'Failed to mark notification as read' });
-  }
+    }
 });
 
 app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) => {
@@ -606,7 +668,7 @@ app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) =
   } catch (error) {
     console.error('Error clearing notifications:', error);
     res.status(500).json({ message: 'Failed to clear notifications' });
-  }
+    }
 });
 
 app.post('/api/notifications', authenticateToken, async (req, res) => {
@@ -632,7 +694,7 @@ app.post('/api/notifications', authenticateToken, async (req, res) => {
 app.post('/api/vouchers/export', authenticateToken, async (req, res) => {
   try {
     const { vouchers, summary } = req.body;
-    
+
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook();
     
