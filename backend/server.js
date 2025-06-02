@@ -94,30 +94,50 @@ const authenticateToken = async (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
+    console.log('No token provided in request');
     return res.status(401).json({ message: 'Authentication token required' });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    console.log('Decoded token:', decoded);
+    
     const user = await User.findById(decoded.id);
     if (!user) {
+      console.log('User not found for ID:', decoded.id);
       return res.status(403).json({ message: 'User not found' });
     }
+
+    console.log('Found user:', {
+      id: user._id.toString(),
+      name: user.name,
+      role: user.role,
+      organization: user.organization.toString()
+    });
+
     req.user = {
-      id: user._id,
+      id: user._id.toString(),
       email: user.email,
       role: user.role,
-      name: user.name
+      name: user.name,
+      organization: user.organization
     };
     next();
   } catch (err) {
+    console.error('Authentication error:', err);
     return res.status(403).json({ message: 'Invalid or expired token' });
   }
 };
 
 // Admin middleware
 const requireAdmin = (req, res, next) => {
+  console.log('Checking admin role:', {
+    userRole: req.user.role,
+    userId: req.user.id
+  });
+  
   if (req.user.role !== 'admin') {
+    console.log('Non-admin user attempted admin action:', req.user);
     return res.status(403).json({ message: 'Admin access required' });
   }
   next();
@@ -198,26 +218,37 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('Login attempt for email:', email);
     
     // Find user by email
     const user = await User.findOne({ email }).populate('organization');
     if (!user) {
+      console.log('User not found for email:', email);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Compare hashed password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log('Invalid password for user:', email);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
+
+    console.log('User authenticated:', {
+      id: user._id.toString(),
+      name: user.name,
+      role: user.role,
+      organization: user.organization._id.toString()
+    });
 
     // Generate JWT
     const token = jwt.sign(
       { 
-        id: user._id,
+        id: user._id.toString(),
         email: user.email,
         role: user.role,
-        name: user.name
+        name: user.name,
+        organization: user.organization._id.toString()
       },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
@@ -228,12 +259,12 @@ app.post('/api/login', async (req, res) => {
     res.json({ 
       token,
       user: {
-        id: userWithoutPassword._id,
+        id: userWithoutPassword._id.toString(),
         name: userWithoutPassword.name,
         email: userWithoutPassword.email,
         role: userWithoutPassword.role,
         organization: {
-          _id: userWithoutPassword.organization._id,
+          _id: userWithoutPassword.organization._id.toString(),
           name: userWithoutPassword.organization.name
         }
       }
@@ -492,25 +523,44 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, email, role, password, organization } = req.body;
     
+    console.log('Creating user request:', {
+      body: {
+        ...req.body,
+        password: '[REDACTED]'
+      },
+      user: req.user,
+      headers: req.headers
+    });
+    
     // Validate required fields
     if (!name || !email || !role || !password || !organization) {
+      console.log('Missing required fields:', { 
+        name: !!name, 
+        email: !!email, 
+        role: !!role, 
+        hasPassword: !!password, 
+        organization: !!organization 
+      });
       return res.status(400).json({ message: 'All fields are required' });
     }
 
     // Validate role
     if (!['staff', 'accountant', 'admin'].includes(role)) {
+      console.log('Invalid role:', role);
       return res.status(400).json({ message: 'Invalid role' });
     }
     
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      console.log('User already exists:', email);
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
     // Verify organization exists
     const organizationExists = await Organization.findById(organization);
     if (!organizationExists) {
+      console.log('Organization not found:', organization);
       return res.status(400).json({ message: 'Invalid organization' });
     }
 
@@ -520,11 +570,24 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
       role: 'admin'
     }).sort({ createdAt: 1 });
 
+    console.log('Main admin check:', {
+      mainAdminId: mainAdmin?._id.toString(),
+      currentUserId: req.user.id,
+      isMainAdmin: mainAdmin && mainAdmin._id.toString() === req.user.id,
+      organization: organization,
+      currentUserRole: req.user.role
+    });
+
     // Check if the current user is the main admin
     const isMainAdmin = mainAdmin && mainAdmin._id.toString() === req.user.id;
 
     // Only allow main admin to create users
     if (!isMainAdmin) {
+      console.log('Non-main admin attempted to create user:', {
+        currentUser: req.user,
+        mainAdmin: mainAdmin?._id.toString(),
+        currentUserRole: req.user.role
+      });
       return res.status(403).json({ message: 'Only the main admin can create new users' });
     }
 
@@ -546,6 +609,13 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     // Remove password from response
     const userResponse = savedUser.toObject();
     delete userResponse.password;
+    
+    console.log('User created successfully:', {
+      userId: savedUser._id,
+      name: savedUser.name,
+      role: savedUser.role,
+      organization: savedUser.organization
+    });
     
     res.status(201).json(userResponse);
   } catch (error) {
@@ -732,7 +802,8 @@ app.post('/api/vouchers/export', authenticateToken, async (req, res) => {
       { header: 'Status', key: 'status', width: 15 },
       { header: 'Date', key: 'date', width: 20 },
       { header: 'Needed By', key: 'neededBy', width: 20 },
-      { header: 'Description', key: 'description', width: 40 }
+      { header: 'Description', key: 'description', width: 40 },
+      { header: 'Approved By', key: 'approvedBy', width: 20 }
     ];
 
     // Add voucher data
@@ -745,7 +816,8 @@ app.post('/api/vouchers/export', authenticateToken, async (req, res) => {
         status: voucher.status,
         date: new Date(voucher.date).toLocaleDateString(),
         neededBy: new Date(voucher.neededBy).toLocaleDateString(),
-        description: voucher.description
+        description: voucher.description,
+        approvedBy: voucher.approvedBy || 'Not Approved'
       });
     });
 

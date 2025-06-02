@@ -1,4 +1,4 @@
-# KFC Voucher System
+# Voucher System
 
 A React-based web application for managing KFC vouchers. This application allows users to create, view, and manage vouchers for KFC orders.
 

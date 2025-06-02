@@ -1,14 +1,15 @@
 import axios from 'axios';
 
 // Use environment variable for API URL with fallback
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://your-vercel-deployment-url.vercel.app/api';
 
-// Create axios instance with default config
+// Create axios instance with base configuration
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000, // Increased timeout to 15 seconds
+  timeout: 10000,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   }
 });
 
@@ -224,7 +225,11 @@ export const createUser = async (userData) => {
     }
 
     const currentUser = JSON.parse(userStr);
-    if (!currentUser || !currentUser.organization || !currentUser.organization._id) {
+    console.log('Current user data:', currentUser);
+
+    // Check if we have the organization ID
+    if (!currentUser.organization || !currentUser.organization._id) {
+      console.error('Organization data missing:', currentUser.organization);
       throw new Error('Organization information not found. Please log in again.');
     }
 
@@ -234,16 +239,25 @@ export const createUser = async (userData) => {
       organization: currentUser.organization._id
     };
 
-    console.log('Creating user with data:', formattedData);
-    const response = await api.post('/users', formattedData);
+    console.log('Creating user with data:', {
+      ...formattedData,
+      password: '[REDACTED]'
+    });
+    
+    const response = await api.post('/users', formattedData, withRetry());
+    console.log('User creation response:', response.data);
     return response.data;
   } catch (error) {
+    console.error('Error creating user:', error);
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
       window.location.href = '/login';
     }
-    logError(error, 'Error creating user');
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    }
     throw error;
   }
 };

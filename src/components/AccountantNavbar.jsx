@@ -10,14 +10,9 @@ export default function AccountantNavbar() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/accountant-dashboard" className="text-xl font-bold text-red-600">
-              KFC Voucher
+              Voucher System
             </Link>
           </div>
           <div className="flex items-center">
             <AccountantDropdown />
-          </div>
-        </div>
-      </div>
-    </nav>
-  )
-} 
+          

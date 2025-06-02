@@ -1,7 +1,7 @@
 {
   "name": "kfc-voucher-backend",
   "version": "1.0.0",
-  "description": "Backend for KFC Voucher System",
+  "description": "Backend for Voucher System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

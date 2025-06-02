@@ -5,7 +5,7 @@ import { Providers } from '../components/Providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'KFC Voucher System',
+  title: 'Voucher System',
   description: 'Voucher management system for KFC',
 };
 
