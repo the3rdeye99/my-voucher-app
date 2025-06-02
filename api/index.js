@@ -253,5 +253,232 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Get all users (for debugging)
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await User.find().populate('organization');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Create user (admin only)
+app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    console.log('User creation request:', { name, email, role });
+
+    // Validate required fields
+    if (!name || !email || !password || !role) {
+      console.log('Missing required fields');
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate role
+    if (!['staff', 'accountant', 'admin'].includes(role)) {
+      console.log('Invalid role:', role);
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      console.log('User already exists:', email);
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    // Get organization from current user
+    const organization = await Organization.findById(req.user.organization);
+    if (!organization) {
+      console.log('Organization not found for user:', req.user.id);
+      return res.status(400).json({ message: 'Organization not found' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      role,
+      organization: organization._id
+    });
+
+    await user.save();
+    console.log('User created successfully:', user);
+
+    res.status(201).json({
+      message: 'User created successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all vouchers
+app.get('/api/vouchers', authenticateToken, async (req, res) => {
+  try {
+    const { staffId } = req.query;
+    let query = { organization: req.user.organization };
+
+    if (staffId) {
+      query.staffId = staffId;
+    }
+
+    const vouchers = await Voucher.find(query)
+      .populate('staffId', 'name email')
+      .sort({ date: -1 });
+
+    res.json(vouchers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Create voucher
+app.post('/api/vouchers', authenticateToken, async (req, res) => {
+  try {
+    const { purpose, amount, description, neededBy, staffName } = req.body;
+    console.log('Voucher creation request:', { purpose, amount, description, neededBy, staffName });
+
+    // Validate required fields
+    if (!purpose || !amount || !description || !neededBy || !staffName) {
+      console.log('Missing required fields');
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Generate unique voucher ID
+    const voucherId = `V${Date.now()}`;
+
+    // Create voucher
+    const voucher = new Voucher({
+      id: voucherId,
+      purpose,
+      amount,
+      description,
+      neededBy,
+      staffName,
+      staffId: req.user.id,
+      organization: req.user.organization
+    });
+
+    await voucher.save();
+    console.log('Voucher created successfully:', voucher);
+
+    res.status(201).json(voucher);
+  } catch (error) {
+    console.error('Error creating voucher:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Approve voucher
+app.put('/api/vouchers/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const voucher = await Voucher.findById(req.params.id);
+    if (!voucher) {
+      return res.status(404).json({ message: 'Voucher not found' });
+    }
+
+    voucher.status = 'approved';
+    voucher.approvedBy = req.user.name;
+    await voucher.save();
+
+    res.json(voucher);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Reject voucher
+app.put('/api/vouchers/:id/reject', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const voucher = await Voucher.findById(req.params.id);
+    if (!voucher) {
+      return res.status(404).json({ message: 'Voucher not found' });
+    }
+
+    voucher.status = 'rejected';
+    await voucher.save();
+
+    res.json(voucher);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Mark voucher as paid
+app.put('/api/vouchers/:id/pay', authenticateToken, async (req, res) => {
+  try {
+    const voucher = await Voucher.findById(req.params.id);
+    if (!voucher) {
+      return res.status(404).json({ message: 'Voucher not found' });
+    }
+
+    voucher.status = 'paid';
+    await voucher.save();
+
+    res.json(voucher);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get notifications
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const notifications = await Notification.find({
+      recipient: req.user.id,
+      organization: req.user.organization
+    }).sort({ createdAt: -1 });
+
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    const notification = await Notification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    notification.read = true;
+    await notification.save();
+
+    res.json(notification);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Clear all notifications
+app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) => {
+  try {
+    await Notification.deleteMany({
+      recipient: req.user.id,
+      organization: req.user.organization
+    });
+
+    res.json({ message: 'All notifications cleared' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Export the Express API
 module.exports = app; 
