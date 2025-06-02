@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { markAsPaid } from '../../services/api'
+import { markVoucherAsPaid } from '../../services/api'
 
 export default function VoucherCard({ voucher, onMarkAsPaid }) {
   const [showDetails, setShowDetails] = useState(false)
@@ -20,7 +20,7 @@ export default function VoucherCard({ voucher, onMarkAsPaid }) {
     try {
       setIsLoading(true)
       setError(null)
-      await markAsPaid(voucher.id)
+      await markVoucherAsPaid(voucher.id)
       onMarkAsPaid(voucher.id)
     } catch (err) {
       setError('Failed to mark voucher as paid. Please try again.')
