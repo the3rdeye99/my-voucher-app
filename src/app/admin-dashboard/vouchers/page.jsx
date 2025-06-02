@@ -57,7 +57,7 @@ export default function AdminVouchers() {
       await fetchVouchers()
     } catch (error) {
       console.error('Error approving voucher:', error)
-      setError('Failed to approve voucher')
+      setError(error.response?.data?.message || 'Failed to approve voucher. Please try again.')
     }
   }
 

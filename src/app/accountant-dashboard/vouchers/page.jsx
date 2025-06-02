@@ -20,7 +20,7 @@ export default function AccountantVouchers() {
 
   useEffect(() => {
     if (user) {
-      fetchVouchers()
+    fetchVouchers()
       // Set up polling every 5 seconds for real-time updates
       const interval = setInterval(fetchVouchers, 5000)
       return () => clearInterval(interval)

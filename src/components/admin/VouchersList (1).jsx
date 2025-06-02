@@ -1,56 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { rejectVoucher, markVoucherAsPaid } from '../../services/api'
+import { useState } from 'react'
 
-export default function VouchersList({ vouchers, onApprove, onReject, user, onMarkAsPaid, showActions = true }) {
+export default function VouchersList({ vouchers, onApprove }) {
   const [selectedVoucher, setSelectedVoucher] = useState(null)
-  const [isRejecting, setIsRejecting] = useState(false)
-  const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
-
-  // Filter vouchers based on user role and sort by date
-  const filteredVouchers = useMemo(() => {
-    let filtered = vouchers;
-    
-    if (user) {
-    if (user.role === 'admin' || user.role === 'accountant') {
-        filtered = vouchers; // Admin and accountants can see all vouchers
-      } else {
-        filtered = vouchers.filter(voucher => voucher.staffId === user.id);
-      }
-    }
-    
-    // Sort by date in descending order (newest first)
-    return [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [vouchers, user]);
-
-  const handleReject = async (voucherId) => {
-    try {
-      setIsRejecting(true)
-      await rejectVoucher(voucherId)
-      // Refresh the vouchers list
-      window.location.reload()
-    } catch (error) {
-      console.error('Error rejecting voucher:', error)
-      alert('Failed to reject voucher. Please try again.')
-    } finally {
-      setIsRejecting(false)
-    }
-  }
-
-  const handleMarkAsPaid = async (voucherId) => {
-    try {
-      setIsMarkingAsPaid(true)
-      await markVoucherAsPaid(voucherId)
-      // Refresh the vouchers list
-      window.location.reload()
-    } catch (error) {
-      console.error('Error marking voucher as paid:', error)
-      alert('Failed to mark voucher as paid. Please try again.')
-    } finally {
-      setIsMarkingAsPaid(false)
-    }
-  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -58,8 +11,6 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
         return 'bg-yellow-100 text-yellow-800'
       case 'approved':
         return 'bg-green-100 text-green-800'
-      case 'rejected':
-        return 'bg-red-100 text-red-800'
       case 'paid':
         return 'bg-blue-100 text-blue-800'
       default:
@@ -79,7 +30,7 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
     return `₦${amount.toLocaleString()}`
   }
 
-  if (filteredVouchers.length === 0) {
+  if (vouchers.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
         No vouchers found.
@@ -99,12 +50,11 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Approved By</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredVouchers.map((voucher) => (
+            {vouchers.map((voucher) => (
               <tr key={voucher.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher.staffName}</td>
@@ -118,41 +68,21 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {formatDate(voucher.date)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {voucher.approvedBy || '-'}
-                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => setSelectedVoucher(voucher)}
-                      className="text-indigo-600 hover:text-indigo-900"
-                    >
-                      View
-                    </button>
-                    {user?.role === 'admin' && voucher.status === 'pending' && (
-                      <>
-                        <button
-                          onClick={() => onApprove(voucher.id)}
-                          className="text-green-600 hover:text-green-900"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleReject(voucher.id)}
-                          disabled={isRejecting}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isRejecting ? 'Rejecting...' : 'Reject'}
-                        </button>
-                      </>
-                    )}
-                    {user?.role === 'accountant' && voucher.status === 'approved' && (
+                    {voucher.status === 'pending' ? (
                       <button
-                        onClick={() => handleMarkAsPaid(voucher.id)}
-                        disabled={isMarkingAsPaid}
-                        className="text-blue-600 hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => onApprove(voucher.id)}
+                        className="text-green-600 hover:text-green-900"
                       >
-                        {isMarkingAsPaid ? 'Processing...' : 'Mark as Paid'}
+                        Approve
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedVoucher(voucher)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        View
                       </button>
                     )}
                   </div>
