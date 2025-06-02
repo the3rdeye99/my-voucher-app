@@ -15,9 +15,4 @@ export default function AccountantNavbar() {
           </div>
           <div className="flex items-center">
             <AccountantDropdown />
-          </div>
-        </div>
-      </div>
-    </nav>
-  )
-}
+          
