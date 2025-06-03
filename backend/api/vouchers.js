@@ -29,6 +29,14 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Admin middleware
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+  next();
+};
+
 // MongoDB Connection
 let cachedDb = null;
 
@@ -68,13 +76,36 @@ const voucherSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
   neededBy: { type: Date, required: true },
   updatedAt: { type: Date, default: Date.now },
-  approvedBy: { type: String }
+  approvedBy: { type: String, required: false },
+  paidBy: { type: String, required: false }
 });
 
+// Drop the old code index if it exists
+const dropOldIndex = async () => {
+  try {
+    await Voucher.collection.dropIndex('code_1');
+    console.log('Successfully dropped old code index');
+  } catch (error) {
+    if (error.code !== 26) { // Ignore if index doesn't exist
+      console.error('Error dropping old index:', error);
+    }
+  }
+};
+
+// Initialize the model and drop old index
 const Voucher = mongoose.model('Voucher', voucherSchema);
+dropOldIndex();
+
+// Generate a unique voucher code
+const generateVoucherCode = async () => {
+  const prefix = 'V';
+  const timestamp = Date.now().toString().slice(-6);
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `${prefix}${timestamp}${random}`;
+};
 
 module.exports = async (req, res) => {
-  // Set CORS headers
+  // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -108,6 +139,8 @@ module.exports = async (req, res) => {
         query.staffId = staffId;
       }
       
+      console.log('Fetching vouchers with query:', query);
+      
       const vouchers = await Voucher.find(query)
         .populate({
           path: 'staffId',
@@ -119,42 +152,167 @@ module.exports = async (req, res) => {
           model: 'Organization',
           select: 'name'
         })
+        .select('id purpose amount description status staffId staffName organization date neededBy updatedAt approvedBy paidBy') // Explicitly select all fields
         .sort({ date: -1 });
+      
+      console.log('Fetched vouchers:', vouchers.map(v => ({
+        id: v.id,
+        status: v.status,
+        approvedBy: v.approvedBy
+      })));
       
       return res.json(vouchers);
     }
 
     // Handle POST request
     if (req.method === 'POST') {
-      const { purpose, amount, description, neededBy, staffId, staffName, organization } = req.body;
-      
-      // Validate required fields
-      if (!purpose || !amount || !description || !neededBy || !staffId || !staffName || !organization) {
-        return res.status(400).json({ message: 'All fields are required' });
+      try {
+        const { staffId, staffName, purpose, description, amount, neededBy, file, organization } = req.body;
+        
+        // Validate required fields
+        if (!staffId || !staffName || !purpose || !description || !amount || !neededBy || !organization) {
+          return res.status(400).json({ 
+            message: 'Missing required fields',
+            details: {
+              staffId: !staffId,
+              staffName: !staffName,
+              purpose: !purpose,
+              description: !description,
+              amount: !amount,
+              neededBy: !neededBy,
+              organization: !organization
+            }
+          });
+        }
+
+        // Generate a unique voucher ID
+        const voucherId = await generateVoucherCode();
+        
+        const voucher = new Voucher({
+          id: voucherId,
+          staffId,
+          staffName,
+          purpose,
+          description,
+          amount: parseFloat(amount),
+          neededBy: new Date(neededBy),
+          file,
+          organization,
+          status: 'pending',
+          date: new Date(),
+          updatedAt: new Date()
+        });
+
+        await voucher.save();
+        console.log('Voucher created successfully:', { id: voucher.id, staffName: voucher.staffName });
+        return res.status(201).json(voucher);
+      } catch (error) {
+        console.error('Error creating voucher:', error);
+        if (error.code === 11000) {
+          return res.status(400).json({ 
+            message: 'Duplicate voucher ID generated. Please try again.',
+            error: error.message 
+          });
+        }
+        return res.status(500).json({ 
+          message: 'Error creating voucher',
+          error: error.message,
+          details: error.name === 'ValidationError' ? Object.values(error.errors).map(err => err.message) : undefined
+        });
       }
-
-      // Generate a unique voucher ID
-      const voucherId = `V${Date.now().toString().slice(-6)}`;
-      
-      const voucher = new Voucher({
-        id: voucherId,
-        purpose: purpose.trim(),
-        amount: parseFloat(amount),
-        description: description.trim(),
-        status: 'pending',
-        staffId,
-        staffName: staffName.trim(),
-        organization,
-        date: new Date(),
-        neededBy: new Date(neededBy),
-        updatedAt: new Date()
-      });
-
-      await voucher.save();
-      return res.status(201).json(voucher);
     }
 
-    // Handle PUT request
+    // Handle PUT request for voucher approval
+    if (req.method === 'PUT' && req.url.includes('/approve')) {
+      // Check admin role
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      // Extract voucher ID from URL
+      const urlParts = req.url.split('/');
+      const voucherId = urlParts[urlParts.length - 2]; // Get the ID before 'approve'
+      
+      console.log('Approving voucher:', {
+        url: req.url,
+        urlParts,
+        voucherId,
+        user: req.user
+      });
+
+      const voucher = await Voucher.findOneAndUpdate(
+        { id: voucherId },
+        { 
+          status: 'approved',
+          updatedAt: new Date(),
+          approvedBy: req.user.name || 'Admin'
+        },
+        { new: true, runValidators: true }
+      );
+
+      if (!voucher) {
+        console.log('Voucher not found:', voucherId);
+        return res.status(404).json({ message: 'Voucher not found' });
+      }
+
+      console.log('Voucher approved successfully:', {
+        id: voucher.id,
+        status: voucher.status,
+        approvedBy: voucher.approvedBy
+      });
+
+      // Return the updated voucher with all fields
+      return res.json(voucher);
+    }
+
+    // Handle PUT request for marking voucher as paid
+    if (req.method === 'PUT' && req.url.includes('/pay')) {
+      // Check accountant role
+      if (req.user.role !== 'accountant') {
+        return res.status(403).json({ message: 'Accountant access required' });
+      }
+
+      // Extract voucher ID from URL
+      const urlParts = req.url.split('/');
+      const voucherId = urlParts[urlParts.length - 2]; // Get the ID before 'pay'
+      
+      console.log('Marking voucher as paid:', {
+        url: req.url,
+        urlParts,
+        voucherId,
+        user: req.user
+      });
+
+      // First find the voucher to preserve the approvedBy field
+      const existingVoucher = await Voucher.findOne({ id: voucherId });
+      if (!existingVoucher) {
+        console.log('Voucher not found:', voucherId);
+        return res.status(404).json({ message: 'Voucher not found' });
+      }
+
+      const voucher = await Voucher.findOneAndUpdate(
+        { id: voucherId },
+        { 
+          status: 'paid',
+          updatedAt: new Date(),
+          paidBy: req.user.name || 'Accountant',
+          approvedBy: existingVoucher.approvedBy // Preserve the approvedBy field
+        },
+        { new: true, runValidators: true }
+      );
+
+      console.log('Voucher marked as paid successfully:', {
+        id: voucher.id,
+        status: voucher.status,
+        paidBy: voucher.paidBy,
+        approvedBy: voucher.approvedBy
+      });
+
+      // Return the updated voucher with all fields
+      return res.json(voucher);
+    }
+
+    // Handle other PUT requests
     if (req.method === 'PUT') {
       const { id } = req.params;
       const updates = req.body;
