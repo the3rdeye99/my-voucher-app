@@ -1,7 +1,11 @@
 import axios from 'axios';
 
-// Use environment variable for API URL with fallback
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://your-vercel-deployment-url.vercel.app/api';
+// Use environment variable for API URL
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, ''); // Remove trailing slashes
+
+if (!API_URL) {
+  console.error('NEXT_PUBLIC_API_URL is not defined in environment variables');
+}
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -274,15 +278,15 @@ export const deleteUser = async (userId) => {
 
 // Notification API functions
 export const getNotifications = async () => {
-  const response = await fetch(`${API_URL}/notifications`, {
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`
-    }
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch notifications');
+  try {
+    console.log('API: Fetching notifications');
+    const response = await api.get('/notifications', withRetry());
+    console.log('API: Notifications response:', response.data);
+    return response.data;
+  } catch (error) {
+    logError(error, 'Error fetching notifications');
+    throw error;
   }
-  return response.json();
 };
 
 export const markNotificationAsRead = async (notificationId) => {

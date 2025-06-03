@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://gaage-backend.vercel.app';
+
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     organizationName: '',
@@ -36,29 +38,42 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/register', {
+      const apiUrl = `${API_URL.replace(/\/$/, '')}/api/register`;
+      console.log('Attempting registration with API URL:', apiUrl);
+      console.log('Registration payload:', {
+        email: formData.email,
+        password: formData.password,
+        organizationName: formData.organizationName,
+        adminName: formData.adminName
+      });
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          organizationName: formData.organizationName,
-          adminName: formData.adminName,
           email: formData.email,
           password: formData.password,
-          role: 'admin'
+          organizationName: formData.organizationName,
+          adminName: formData.adminName
         }),
+        credentials: 'include'
       });
 
+      console.log('Registration response status:', response.status);
+      
       const data = await response.json();
+      console.log('Registration response data:', data);
 
       if (!response.ok) {
         throw new Error(data.message || 'Registration failed');
       }
 
-      // Registration successful, redirect to confirmation page
-      router.push('/register/confirmation');
+      // Registration successful, redirect to login page
+      router.push('/login?registered=true');
     } catch (err) {
+      console.error('Registration error:', err);
       setError(err.message || 'An error occurred during registration');
     } finally {
       setLoading(false);

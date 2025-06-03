@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../context/AuthContext'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://gaage-backend.vercel.app';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -19,36 +21,44 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:5000/api/login', {
+      const apiUrl = `${API_URL.replace(/\/$/, '')}/api/login`;
+      console.log('Attempting login with API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
-      })
+        credentials: 'include'
+      });
 
-      const data = await response.json()
+      console.log('Login response status:', response.status);
+      console.log('Login response headers:', Object.fromEntries(response.headers.entries()));
+      
+      const data = await response.json();
+      console.log('Login response data:', data);
 
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed')
+        throw new Error(data.message || 'Login failed');
       }
 
       // Store token and user data
-      localStorage.setItem('token', data.token)
-      login(data.user)
+      localStorage.setItem('token', data.token);
+      login(data.user);
 
       // Redirect based on role
       const redirectPath = {
         admin: '/admin-dashboard',
-        accountant: '/accountant-dashboard',
-        staff: '/staff-dashboard'
-      }[data.user.role] || '/dashboard'
+        user: '/dashboard'
+      }[data.user.role] || '/dashboard';
 
-      router.push(redirectPath)
+      router.push(redirectPath);
     } catch (error) {
-      setError(error.message)
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to login. Please try again.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -62,7 +72,7 @@ export default function LoginPage() {
           <p className="mt-2 text-center text-sm text-gray-600">
             Or{' '}
             <Link href="/register" className="font-medium text-red-600 hover:text-red-500">
-              register your organization
+              register your account
             </Link>
           </p>
         </div>
