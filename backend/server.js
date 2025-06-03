@@ -13,29 +13,76 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: '*', // Allow all origins in development
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL, 'http://localhost:3000']
+    : 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Accept', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/kfc-voucher', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => {
-  console.log('Connected to MongoDB successfully');
-  // Start the server only after MongoDB connection is established
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    console.log('Connected to MongoDB successfully');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    // Don't exit the process in serverless environment
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
+  }
+};
+
+// Connect to MongoDB
+connectDB();
+
+// Only start the server if we're not in a serverless environment
+if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
-})
-.catch(err => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1); // Exit the process if MongoDB connection fails
+}
+
+// Add a health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// Add a root endpoint for testing
+app.get('/', (req, res) => {
+  res.json({ message: 'Welcome to the Voucher System API' });
+});
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'production' ? {} : err
+  });
+});
+
+// Add 404 handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    message: 'Route not found',
+    path: req.path,
+    method: req.method
+  });
 });
 
 // Organization Schema
@@ -846,4 +893,7 @@ app.post('/api/vouchers/export', authenticateToken, async (req, res) => {
     console.error('Error exporting vouchers:', error);
     res.status(500).json({ message: 'Error exporting vouchers', error: error.message });
   }
-}); 
+});
+
+// Export the Express API
+module.exports = app; 
