@@ -93,8 +93,8 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voucher ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -105,8 +105,8 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredVouchers.map((voucher) => (
-              <tr key={voucher.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher.id}</td>
+              <tr key={voucher._id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher._id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher.staffName}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{voucher.purpose}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatAmount(voucher.amount)}</td>
@@ -119,7 +119,7 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
                   {formatDate(voucher.date)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {voucher.approvedBy || '-'}
+                  {(voucher.status === 'approved' || voucher.status === 'paid') ? (voucher.approvedBy || 'Admin') : '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <div className="flex space-x-2">
@@ -132,13 +132,13 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
                     {user?.role === 'admin' && voucher.status === 'pending' && (
                       <>
                         <button
-                          onClick={() => onApprove(voucher.id)}
+                          onClick={() => onApprove(voucher._id)}
                           className="text-green-600 hover:text-green-900"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={() => handleReject(voucher.id)}
+                          onClick={() => handleReject(voucher._id)}
                           disabled={isRejecting}
                           className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -148,7 +148,7 @@ export default function VouchersList({ vouchers, onApprove, onReject, user, onMa
                     )}
                     {user?.role === 'accountant' && voucher.status === 'approved' && (
                       <button
-                        onClick={() => handleMarkAsPaid(voucher.id)}
+                        onClick={() => handleMarkAsPaid(voucher._id)}
                         disabled={isMarkingAsPaid}
                         className="text-blue-600 hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
                       >

@@ -130,21 +130,19 @@ export const getUsers = async () => {
 
 export const createVoucher = async (voucherData) => {
   try {
-    console.log('Raw voucher data received:', voucherData);
-    
     // Get the current user from localStorage
     const userStr = localStorage.getItem('user');
-    console.log('User data from localStorage:', userStr);
-    
     if (!userStr) {
       throw new Error('Please log in to create a voucher');
     }
 
     const user = JSON.parse(userStr);
-    console.log('Parsed user data:', user);
-    
-    if (!user || !user.id) {
-      throw new Error('Invalid user session. Please log in again.');
+    console.log('Current user data:', user);
+
+    // Check if we have the organization ID
+    if (!user.organization || !user.organization.id) {
+      console.error('Organization data missing:', user.organization);
+      throw new Error('Organization information not found. Please log in again.');
     }
 
     // Validate required fields
@@ -172,7 +170,7 @@ export const createVoucher = async (voucherData) => {
     };
 
     console.log('Formatted voucher data being sent:', formattedData);
-    const response = await api.post('/vouchers', formattedData);
+    const response = await api.post('/vouchers', formattedData, withRetry());
     console.log('Voucher creation response:', response.data);
     return response.data;
   } catch (error) {
@@ -211,11 +209,16 @@ export const rejectVoucher = async (voucherId) => {
 
 export const markVoucherAsPaid = async (voucherId) => {
   try {
+    console.log('Marking voucher as paid:', voucherId);
     const response = await api.put(`/vouchers/${voucherId}/pay`);
     console.log('[Voucher Marked as Paid]', response.data);
     return response.data;
   } catch (error) {
-    logError(error, 'Error marking voucher as paid');
+    console.error('Error marking voucher as paid:', {
+      voucherId,
+      error: error.message,
+      response: error.response?.data
+    });
     throw error;
   }
 };

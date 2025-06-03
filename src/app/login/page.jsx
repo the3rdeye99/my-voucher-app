@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../context/AuthContext'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://gaage-backend.vercel.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const apiUrl = `${API_URL.replace(/\/$/, '')}/api/login`;
+      const apiUrl = `${API_URL.replace(/\/$/, '')}/login`;
       console.log('Attempting login with API URL:', apiUrl);
       
       const response = await fetch(apiUrl, {
