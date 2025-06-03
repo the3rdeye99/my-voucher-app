@@ -167,8 +167,8 @@ export const createVoucher = async (voucherData) => {
       description: voucherData.description.trim(),
       neededBy: new Date(voucherData.neededBy).toISOString(),
       staffId: user.id,
-      staffName: voucherData.staffName.trim(),
-      organization: user.organization || user.organizationName
+      staffName: user.name,
+      organization: user.organization.id
     };
 
     console.log('Formatted voucher data being sent:', formattedData);
@@ -232,15 +232,15 @@ export const createUser = async (userData) => {
     console.log('Current user data:', currentUser);
 
     // Check if we have the organization ID
-    if (!currentUser.organization || !currentUser.organization._id) {
+    if (!currentUser.organization || !currentUser.organization.id) {
       console.error('Organization data missing:', currentUser.organization);
       throw new Error('Organization information not found. Please log in again.');
     }
 
-    // Add organization to the user data
+    // Add organization ID to the user data
     const formattedData = {
       ...userData,
-      organization: currentUser.organization._id
+      organization: currentUser.organization.id // Pass only the ID
     };
 
     console.log('Creating user with data:', {

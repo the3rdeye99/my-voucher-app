@@ -311,7 +311,7 @@ app.post('/api/login', async (req, res) => {
         email: userWithoutPassword.email,
         role: userWithoutPassword.role,
         organization: {
-          _id: userWithoutPassword.organization._id.toString(),
+          id: userWithoutPassword.organization._id.toString(),
           name: userWithoutPassword.organization.name
         }
       }
@@ -648,7 +648,7 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
       email,
       role,
       password: hashedPassword,
-      organization
+      organization: organization
     });
 
     const savedUser = await user.save();

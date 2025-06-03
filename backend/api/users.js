@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
+const bcrypt = require('bcryptjs');
 
 // Load environment variables
 dotenv.config();
@@ -96,10 +97,14 @@ module.exports = async (req, res) => {
             return res.status(400).json({ message: 'Organization not found' });
           }
         }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
         
         const user = new User({
           email,
-          password, // Note: Should be hashed before saving
+          password: hashedPassword, // Use hashed password
           name,
           role,
           organization

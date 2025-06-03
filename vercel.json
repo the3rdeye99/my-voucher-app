@@ -2,18 +2,11 @@
   "version": 2,
   "builds": [
     {
-      "src": "backend/api/**/*.js",
-      "use": "@vercel/node"
+      "src": "package.json",
+      "use": "@vercel/next"
     }
   ],
-  "routes": [
-    {
-      "src": "/api/login",
-      "dest": "/backend/api/login.js"
-    },
-    {
-      "src": "/",
-      "dest": "/backend/api/index.js"
-    }
-  ]
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://gaage-backend.vercel.app"
+  }
 } 

@@ -99,15 +99,20 @@ export default function AdminDashboard() {
     try {
       // Get the current user's organization
       const currentUser = JSON.parse(localStorage.getItem('user'));
-      if (!currentUser || !currentUser.organization || !currentUser.organization._id) {
+      if (!currentUser || !currentUser.organization || !currentUser.organization.id) {
         throw new Error('Organization information not found. Please log in again.');
       }
 
       // Add organization ID to the new user data
       const userData = {
         ...newUser,
-        organization: currentUser.organization._id
+        organization: currentUser.organization.id // Pass just the ID, not the entire object
       };
+
+      console.log('Creating user with data:', {
+        ...userData,
+        password: '[REDACTED]'
+      });
 
       await createUser(userData)
       setShowAddUserModal(false)

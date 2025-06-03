@@ -2,9 +2,32 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
 
 // Load environment variables
 dotenv.config();
+
+// Import models
+const User = require('../models/User');
+const Organization = require('../models/Organization');
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
 
 // MongoDB Connection
 let cachedDb = null;
@@ -34,15 +57,18 @@ const connectDB = async () => {
 
 // Voucher Schema
 const voucherSchema = new mongoose.Schema({
-  code: { type: String, required: true, unique: true },
+  id: { type: String, required: true, unique: true },
+  purpose: { type: String, required: true },
   amount: { type: Number, required: true },
-  status: { type: String, enum: ['active', 'used', 'expired'], default: 'active' },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  usedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  description: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'paid'], default: 'pending' },
+  staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  staffName: { type: String, required: true },
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization' },
-  createdAt: { type: Date, default: Date.now },
-  expiresAt: { type: Date },
-  usedAt: { type: Date }
+  date: { type: Date, default: Date.now },
+  neededBy: { type: Date, required: true },
+  updatedAt: { type: Date, default: Date.now },
+  approvedBy: { type: String }
 });
 
 const Voucher = mongoose.model('Voucher', voucherSchema);
@@ -67,26 +93,61 @@ module.exports = async (req, res) => {
     // Connect to MongoDB
     await connectDB();
 
+    // Apply authentication middleware for all routes except OPTIONS
+    if (req.method !== 'OPTIONS') {
+      authenticateToken(req, res, () => {});
+    }
+
     // Handle GET request
     if (req.method === 'GET') {
-      const vouchers = await Voucher.find()
-        .populate('createdBy', 'name email')
-        .populate('usedBy', 'name email')
-        .populate('organization', 'name');
+      const { staffId } = req.query;
+      let query = {};
+      
+      // If staffId is provided, filter vouchers for that user
+      if (staffId) {
+        query.staffId = staffId;
+      }
+      
+      const vouchers = await Voucher.find(query)
+        .populate({
+          path: 'staffId',
+          model: 'User',
+          select: 'name email'
+        })
+        .populate({
+          path: 'organization',
+          model: 'Organization',
+          select: 'name'
+        })
+        .sort({ date: -1 });
       
       return res.json(vouchers);
     }
 
     // Handle POST request
     if (req.method === 'POST') {
-      const { code, amount, expiresAt, organization } = req.body;
+      const { purpose, amount, description, neededBy, staffId, staffName, organization } = req.body;
+      
+      // Validate required fields
+      if (!purpose || !amount || !description || !neededBy || !staffId || !staffName || !organization) {
+        return res.status(400).json({ message: 'All fields are required' });
+      }
+
+      // Generate a unique voucher ID
+      const voucherId = `V${Date.now().toString().slice(-6)}`;
       
       const voucher = new Voucher({
-        code,
-        amount,
-        expiresAt,
+        id: voucherId,
+        purpose: purpose.trim(),
+        amount: parseFloat(amount),
+        description: description.trim(),
+        status: 'pending',
+        staffId,
+        staffName: staffName.trim(),
         organization,
-        createdBy: req.user._id // Assuming user is authenticated
+        date: new Date(),
+        neededBy: new Date(neededBy),
+        updatedAt: new Date()
       });
 
       await voucher.save();
@@ -128,9 +189,18 @@ module.exports = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   } catch (error) {
     console.error('Voucher operation error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      keyPattern: error.keyPattern,
+      keyValue: error.keyValue
+    });
     res.status(500).json({ 
       message: 'Internal server error',
-      error: error.message 
+      error: error.message,
+      details: error.name === 'ValidationError' ? Object.values(error.errors).map(err => err.message) : undefined
     });
   }
 }; 

@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
         email: userData.email,
         role: userData.role,
         organization: {
-          _id: userData.organization._id,
+          id: userData.organization.id,
           name: userData.organization.name
         }
       }

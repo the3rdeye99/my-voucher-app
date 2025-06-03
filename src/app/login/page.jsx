@@ -50,8 +50,9 @@ export default function LoginPage() {
       // Redirect based on role
       const redirectPath = {
         admin: '/admin-dashboard',
-        user: '/dashboard'
-      }[data.user.role] || '/dashboard';
+        accountant: '/accountant-dashboard',
+        staff: '/staff-dashboard'
+      }[data.user.role] || '/unauthorized';
 
       router.push(redirectPath);
     } catch (error) {
